@@ -31,9 +31,11 @@ func Gofree5gcPath(path string) string {
 	cleanPath := filepath.Clean(path)
 	targetFilePath := cleanPath[len(rootCode)+1:]
 
-	pwd, err := os.Getwd()
-	if err != nil {
+	var pwd string
+	if pwdTmp, err := os.Getwd(); err != nil {
 		logger.PathLog.Errorln(err)
+	} else {
+		pwd = pwdTmp
 	}
 	currentPath := filepath.Clean(pwd)
 
@@ -105,11 +107,23 @@ func FindRoot(path string, rootCode string, objName string) (string, bool) {
 func FindModuleRoot(path string, rootCode string) (string, bool) {
 	moduleFilePath := path + filepath.Clean("/go.mod")
 	if Exists(moduleFilePath) {
-		file, _ := os.Open(moduleFilePath)
-		defer file.Close()
+		var file *os.File
+		if fileTmp, err := os.Open(moduleFilePath); err != nil {
+			logger.PathLog.Fatalf("Cannot open %s: %+v", moduleFilePath, err)
+		} else {
+			file = fileTmp
+		}
+		defer func() {
+			if err := file.Close(); err != nil {
+				logger.PathLog.Warnf("File %s cannot close: %v", moduleFilePath, err)
+			}
+		}()
 
 		reader := bufio.NewReader(file)
-		moduleDeclearation, _, _ := reader.ReadLine()
+		moduleDeclearation, _, err := reader.ReadLine()
+		if err != nil {
+			logger.PathLog.Warnf("Read Line failed: %+v", err)
+		}
 		if string(moduleDeclearation) == "module "+rootCode {
 			return path, true
 		}
